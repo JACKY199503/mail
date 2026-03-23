@@ -6,21 +6,16 @@
 <style>
 body { font-family: Arial; max-width: 800px; margin: 40px auto; }
 button { padding: 10px; margin: 5px; cursor: pointer; }
-.mail { border: 1px solid #ccc; padding: 10px; margin-top: 10px; }
 #log { color: red; }
 </style>
 </head>
 <body>
 
-<h2>📧 临时邮箱</h2>
+<h2>📧 临时邮箱（过滤 sharebot.net）</h2>
 
 <button onclick="createEmail()">生成邮箱</button>
 <p id="email"></p>
-
-<button onclick="checkInbox()">刷新收件箱</button>
-
 <div id="log"></div>
-<div id="inbox"></div>
 
 <script>
 let token = "";
@@ -28,40 +23,40 @@ let address = "";
 
 function log(msg) {
     document.getElementById("log").innerText = msg;
-    console.log(msg);
 }
 
 async function createEmail() {
     try {
-        log("正在获取域名...");
+        log("获取域名中...");
 
-        // 1. 获取域名
-        let domainRes = await fetch("https://api.mail.tm/domains");
-        let domainData = await domainRes.json();
+        let res = await fetch("https://api.mail.tm/domains");
+        let data = await res.json();
 
-        if (!domainData["hydra:member"] || domainData["hydra:member"].length === 0) {
-            throw new Error("获取域名失败");
+        let domains = data["hydra:member"]
+            .map(d => d.domain)
+            .filter(d => !d.includes("sharebot.net")); // 🔥 过滤
+
+        if (domains.length === 0) {
+            throw new Error("没有可用域名（已全部被过滤）");
         }
 
-        let domain = domainData["hydra:member"][0].domain;
+        let domain = domains[Math.floor(Math.random() * domains.length)];
 
-        // 2. 生成邮箱
         let username = "user" + Math.random().toString(36).substring(2, 8);
         address = username + "@" + domain;
+
         let password = "123456";
 
-        log("正在注册邮箱...");
+        log("注册邮箱中...");
 
-        // 3. 注册
         await fetch("https://api.mail.tm/accounts", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({ address, password })
         });
 
-        log("正在登录...");
+        log("登录中...");
 
-        // 4. 登录
         let loginRes = await fetch("https://api.mail.tm/token", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
@@ -77,58 +72,10 @@ async function createEmail() {
         token = loginData.token;
 
         document.getElementById("email").innerText = "邮箱: " + address;
-        log("邮箱生成成功 ✅");
+        log("✅ 成功生成（已过滤 sharebot）");
 
     } catch (e) {
-        log("❌ 出错：" + e.message);
-    }
-}
-
-async function checkInbox() {
-    try {
-        if (!token) {
-            alert("请先生成邮箱！");
-            return;
-        }
-
-        log("正在获取邮件...");
-
-        let res = await fetch("https://api.mail.tm/messages", {
-            headers: { "Authorization": "Bearer " + token }
-        });
-
-        let data = await res.json();
-        let mails = data["hydra:member"];
-
-        let inbox = document.getElementById("inbox");
-        inbox.innerHTML = "";
-
-        if (!mails || mails.length === 0) {
-            inbox.innerHTML = "<p>暂无邮件</p>";
-            return;
-        }
-
-        for (let mail of mails) {
-            let detail = await fetch("https://api.mail.tm/messages/" + mail.id, {
-                headers: { "Authorization": "Bearer " + token }
-            });
-
-            let content = await detail.json();
-
-            let div = document.createElement("div");
-            div.className = "mail";
-            div.innerHTML = `
-                <b>主题：</b>${content.subject}<br>
-                <b>发件人：</b>${content.from.address}<br>
-                <b>内容：</b>${content.text || content.html}
-            `;
-            inbox.appendChild(div);
-        }
-
-        log("加载完成 ✅");
-
-    } catch (e) {
-        log("❌ 获取邮件失败：" + e.message);
+        log("❌ " + e.message);
     }
 }
 </script>
