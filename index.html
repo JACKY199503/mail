@@ -40,7 +40,7 @@ async function create(){
     document.getElementById("mails").innerHTML="";
 
     let domains=await fetch("https://api.mail.tm/domains").then(r=>r.json());
-    let domain=domains["hydra:member"][0].domain;
+    let domain = "mail.tm";
 
     let email=rand()+"@"+domain;
     let password=rand(12);
