@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>10分钟临时邮箱</title>
+<style>
+body {font-family: Arial; max-width: 800px; margin: 30px auto; background:#f7f9fc;}
+.box {background:#fff;padding:20px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.06);}
+.email {font-size:18px;background:#f0f4f8;padding:10px;border-radius:6px;margin:10px 0;}
+button {padding:8px 12px;margin-right:10px;border:none;background:#007bff;color:#fff;border-radius:6px;cursor:pointer;}
+.mail {border-bottom:1px solid #eee;padding:10px 0;}
+.time {color:#666;margin-bottom:10px;}
+</style>
+</head>
+
+<body>
+<div class="box">
+<h2>10分钟临时邮箱</h2>
+
+<div class="email" id="email">加载中...</div>
+<div class="time" id="time">剩余：10:00</div>
+
+<button onclick="copyEmail()">复制邮箱</button>
+<button onclick="create()">换一个</button>
+
+<div id="mails"></div>
+</div>
+
+<script>
+let token="";
+let expire=0;
+
+// 随机字符串
+function rand(len=8){
+    return Math.random().toString(36).substring(2,2+len);
+}
+
+// 创建邮箱
+async function create(){
+    document.getElementById("mails").innerHTML="";
+
+    let domains=await fetch("https://api.mail.tm/domains").then(r=>r.json());
+    let domain=domains["hydra:member"][0].domain;
+
+    let email=rand()+"@"+domain;
+    let password=rand(12);
+
+    await fetch("https://api.mail.tm/accounts",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({address:email,password:password})
+    });
+
+    let res=await fetch("https://api.mail.tm/token",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({address:email,password:password})
+    });
+
+    let data=await res.json();
+    token=data.token;
+
+    document.getElementById("email").innerText=email;
+
+    expire=Date.now()+10*60*1000;
+
+    timer();
+    fetchMail();
+}
+
+// 收邮件
+async function fetchMail(){
+    if(!token) return;
+
+    let res=await fetch("https://api.mail.tm/messages",{
+        headers:{Authorization:"Bearer "+token}
+    });
+
+    let data=await res.json();
+    let html="";
+
+    (data["hydra:member"]||[]).forEach(m=>{
+        html+=`
+        <div class="mail">
+            <b>${m.subject||"无主题"}</b><br>
+            ${m.from.address}<br>
+            <div>${m.text||""}</div>
+        </div>`;
+    });
+
+    document.getElementById("mails").innerHTML=html;
+
+    setTimeout(fetchMail,5000);
+}
+
+// 倒计时
+function timer(){
+    let left=expire-Date.now();
+    if(left<=0){
+        document.getElementById("time").innerText="已过期";
+        token="";
+        return;
+    }
+    let m=Math.floor(left/60000).toString().padStart(2,"0");
+    let s=Math.floor((left%60000)/1000).toString().padStart(2,"0");
+    document.getElementById("time").innerText=`剩余：${m}:${s}`;
+    setTimeout(timer,1000);
+}
+
+// 复制邮箱
+function copyEmail(){
+    let text=document.getElementById("email").innerText;
+    navigator.clipboard.writeText(text);
+    alert("已复制");
+}
+
+create();
+</script>
+</body>
+</html>
