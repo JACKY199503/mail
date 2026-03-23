@@ -40,7 +40,18 @@ async function create(){
     document.getElementById("mails").innerHTML="";
 
     let domains=await fetch("https://api.mail.tm/domains").then(r=>r.json());
-    let domain = "mail.tm";
+    llet list = domains["hydra:member"];
+
+// 过滤掉 sharebot.net
+let filtered = list.filter(d => d.domain !== "sharebot.net");
+
+// 如果过滤后还有可用域名
+if (filtered.length > 0) {
+    var domain = filtered[Math.floor(Math.random() * filtered.length)].domain;
+} else {
+    // 兜底（防止全被过滤）
+    var domain = list[0].domain;
+}
 
     let email=rand()+"@"+domain;
     let password=rand(12);
