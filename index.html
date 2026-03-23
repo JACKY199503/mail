@@ -4,58 +4,91 @@
 <meta charset="UTF-8">
 <title>临时邮箱</title>
 <style>
-    body {
-        font-family: Arial;
-        max-width: 800px;
-        margin: 40px auto;
-    }
-    button {
-        padding: 10px 15px;
-        margin: 10px 5px;
-        cursor: pointer;
-    }
-    .mail {
-        border: 1px solid #ccc;
-        padding: 10px;
-        margin-top: 10px;
-    }
+body {
+    font-family: Arial;
+    max-width: 800px;
+    margin: 40px auto;
+}
+button {
+    padding: 10px;
+    margin: 5px;
+}
+.mail {
+    border: 1px solid #ccc;
+    padding: 10px;
+    margin-top: 10px;
+}
 </style>
 </head>
 <body>
 
-<h2>📧 临时邮箱（1secmail）</h2>
+<h2>📧 临时邮箱（稳定版）</h2>
 
-<button onclick="genEmail()">生成邮箱</button>
+<button onclick="createEmail()">生成邮箱</button>
 <p id="email"></p>
 
-<button onclick="checkMail()">刷新收件箱</button>
+<button onclick="checkInbox()">刷新收件箱</button>
 
 <div id="inbox"></div>
 
 <script>
-let login = "";
-let domain = "";
+let token = "";
+let address = "";
 
-async function genEmail() {
-    const res = await fetch("https://www.1secmail.com/api/v1/?action=genRandomMailbox&count=1");
-    const data = await res.json();
+async function createEmail() {
+    // 1. 获取域名
+    let domainRes = await fetch("https://api.mail.tm/domains");
+    let domainData = await domainRes.json();
+    let domain = domainData["hydra:member"][0].domain;
 
-    const email = data[0];
-    document.getElementById("email").innerText = "邮箱: " + email;
+    // 2. 随机邮箱
+    let username = "user" + Math.random().toString(36).substring(2, 8);
+    address = username + "@" + domain;
 
-    [login, domain] = email.split("@");
+    let password = "123456";
+
+    // 3. 注册账号
+    await fetch("https://api.mail.tm/accounts", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            address,
+            password
+        })
+    });
+
+    // 4. 登录获取 token
+    let loginRes = await fetch("https://api.mail.tm/token", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            address,
+            password
+        })
+    });
+
+    let loginData = await loginRes.json();
+    token = loginData.token;
+
+    document.getElementById("email").innerText = "邮箱: " + address;
 }
 
-async function checkMail() {
-    if (!login) {
+async function checkInbox() {
+    if (!token) {
         alert("请先生成邮箱！");
         return;
     }
 
-    const res = await fetch(`https://www.1secmail.com/api/v1/?action=getMessages&login=${login}&domain=${domain}`);
-    const mails = await res.json();
+    let res = await fetch("https://api.mail.tm/messages", {
+        headers: {
+            "Authorization": "Bearer " + token
+        }
+    });
 
-    const inbox = document.getElementById("inbox");
+    let data = await res.json();
+    let mails = data["hydra:member"];
+
+    let inbox = document.getElementById("inbox");
     inbox.innerHTML = "";
 
     if (mails.length === 0) {
@@ -64,17 +97,20 @@ async function checkMail() {
     }
 
     for (let mail of mails) {
-        const detail = await fetch(
-            `https://www.1secmail.com/api/v1/?action=readMessage&login=${login}&domain=${domain}&id=${mail.id}`
-        );
-        const content = await detail.json();
+        let detail = await fetch("https://api.mail.tm/messages/" + mail.id, {
+            headers: {
+                "Authorization": "Bearer " + token
+            }
+        });
 
-        const div = document.createElement("div");
+        let content = await detail.json();
+
+        let div = document.createElement("div");
         div.className = "mail";
         div.innerHTML = `
             <b>主题：</b>${content.subject}<br>
-            <b>发件人：</b>${content.from}<br>
-            <b>内容：</b>${content.textBody || content.htmlBody}
+            <b>发件人：</b>${content.from.address}<br>
+            <b>内容：</b>${content.text || content.html}
         `;
         inbox.appendChild(div);
     }
