@@ -2,114 +2,84 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>10分钟临时邮箱</title>
+<title>临时邮箱</title>
 <style>
-body {font-family: Arial; max-width: 800px; margin: 30px auto; background:#f7f9fc;}
-.box {background:#fff;padding:20px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.06);}
-.email {font-size:18px;background:#f0f4f8;padding:10px;border-radius:6px;margin:10px 0;}
-button {padding:8px 12px;margin-right:10px;border:none;background:#007bff;color:#fff;border-radius:6px;cursor:pointer;}
-.mail {border-bottom:1px solid #eee;padding:10px 0;}
-.time {color:#666;margin-bottom:10px;}
+    body {
+        font-family: Arial;
+        max-width: 800px;
+        margin: 40px auto;
+    }
+    button {
+        padding: 10px 15px;
+        margin: 10px 5px;
+        cursor: pointer;
+    }
+    .mail {
+        border: 1px solid #ccc;
+        padding: 10px;
+        margin-top: 10px;
+    }
 </style>
 </head>
-
 <body>
-<div class="box">
-<h2>10分钟临时邮箱（Emailnator版）</h2>
 
-<div class="email" id="email">加载中...</div>
-<div class="time" id="time">剩余：10:00</div>
+<h2>📧 临时邮箱（1secmail）</h2>
 
-<button onclick="copyEmail()">复制邮箱</button>
-<button onclick="create()">换一个</button>
+<button onclick="genEmail()">生成邮箱</button>
+<p id="email"></p>
 
-<div id="mails"></div>
-</div>
+<button onclick="checkMail()">刷新收件箱</button>
+
+<div id="inbox"></div>
 
 <script>
-let email = "";
-let expire = 0;
+let login = "";
+let domain = "";
 
-// 创建邮箱（Emailnator）
-async function create(){
-    document.getElementById("mails").innerHTML="";
+async function genEmail() {
+    const res = await fetch("https://www.1secmail.com/api/v1/?action=genRandomMailbox&count=1");
+    const data = await res.json();
 
-    // Emailnator API
-    let res = await fetch("https://www.emailnator.com/generate-email", {
-        method:"POST",
-        headers:{
-            "Content-Type":"application/json"
-        },
-        body: JSON.stringify({
-            email: ["plusGmail"]
-        })
-    });
+    const email = data[0];
+    document.getElementById("email").innerText = "邮箱: " + email;
 
-    let data = await res.json();
-    email = data.email[0];
-
-    document.getElementById("email").innerText = email;
-
-    expire = Date.now() + 10*60*1000;
-
-    timer();
-    fetchMail();
+    [login, domain] = email.split("@");
 }
 
-// 收邮件
-async function fetchMail(){
-    if(!email) return;
-
-    let res = await fetch("https://www.emailnator.com/message-list",{
-        method:"POST",
-        headers:{
-            "Content-Type":"application/json"
-        },
-        body: JSON.stringify({
-            email: email
-        })
-    });
-
-    let data = await res.json();
-
-    let html="";
-    (data.messageData || []).forEach(m=>{
-        html+=`
-        <div class="mail">
-            <b>${m.subject}</b><br>
-            ${m.from}<br>
-        </div>`;
-    });
-
-    document.getElementById("mails").innerHTML = html;
-
-    setTimeout(fetchMail,5000);
-}
-
-// 倒计时
-function timer(){
-    let left = expire-Date.now();
-    if(left<=0){
-        document.getElementById("time").innerText="已过期";
-        email="";
+async function checkMail() {
+    if (!login) {
+        alert("请先生成邮箱！");
         return;
     }
 
-    let m=Math.floor(left/60000).toString().padStart(2,"0");
-    let s=Math.floor((left%60000)/1000).toString().padStart(2,"0");
+    const res = await fetch(`https://www.1secmail.com/api/v1/?action=getMessages&login=${login}&domain=${domain}`);
+    const mails = await res.json();
 
-    document.getElementById("time").innerText=`剩余：${m}:${s}`;
+    const inbox = document.getElementById("inbox");
+    inbox.innerHTML = "";
 
-    setTimeout(timer,1000);
+    if (mails.length === 0) {
+        inbox.innerHTML = "<p>暂无邮件</p>";
+        return;
+    }
+
+    for (let mail of mails) {
+        const detail = await fetch(
+            `https://www.1secmail.com/api/v1/?action=readMessage&login=${login}&domain=${domain}&id=${mail.id}`
+        );
+        const content = await detail.json();
+
+        const div = document.createElement("div");
+        div.className = "mail";
+        div.innerHTML = `
+            <b>主题：</b>${content.subject}<br>
+            <b>发件人：</b>${content.from}<br>
+            <b>内容：</b>${content.textBody || content.htmlBody}
+        `;
+        inbox.appendChild(div);
+    }
 }
-
-// 复制
-function copyEmail(){
-    navigator.clipboard.writeText(email);
-    alert("已复制");
-}
-
-create();
 </script>
+
 </body>
 </html>
