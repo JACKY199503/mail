@@ -15,7 +15,7 @@ button {padding:8px 12px;margin-right:10px;border:none;background:#007bff;color:
 
 <body>
 <div class="box">
-<h2>10分钟临时邮箱</h2>
+<h2>10分钟临时邮箱（Emailnator版）</h2>
 
 <div class="email" id="email">加载中...</div>
 <div class="time" id="time">剩余：10:00</div>
@@ -27,129 +27,88 @@ button {padding:8px 12px;margin-right:10px;border:none;background:#007bff;color:
 </div>
 
 <script>
-let token = "";
+let email = "";
 let expire = 0;
 
-// 随机字符串
-function rand(len=8){
-    return Math.random().toString(36).substring(2,2+len);
-}
-
-// 创建邮箱
+// 创建邮箱（Emailnator）
 async function create(){
-    document.getElementById("mails").innerHTML = "";
+    document.getElementById("mails").innerHTML="";
 
-    try {
-        // 1️⃣ 获取域名列表
-        let domains = await fetch("https://api.mail.tm/domains").then(r=>r.json());
-        let list = domains["hydra:member"] || [];
+    // Emailnator API
+    let res = await fetch("https://www.emailnator.com/generate-email", {
+        method:"POST",
+        headers:{
+            "Content-Type":"application/json"
+        },
+        body: JSON.stringify({
+            email: ["plusGmail"]
+        })
+    });
 
-        // 2️⃣ 过滤掉 sharebot.net
-        let blacklist = ["sharebot.net"];
-        let filtered = list.filter(d => !blacklist.includes(d.domain));
+    let data = await res.json();
+    email = data.email[0];
 
-        // 兜底（防止过滤完为空）
-        if(filtered.length === 0){
-            filtered = list;
-        }
+    document.getElementById("email").innerText = email;
 
-        // 3️⃣ 随机选一个域名
-        let domain = filtered[Math.floor(Math.random() * filtered.length)].domain;
+    expire = Date.now() + 10*60*1000;
 
-        let email = rand() + "@" + domain;
-        let password = rand(12);
-
-        // 4️⃣ 创建账号
-        let createRes = await fetch("https://api.mail.tm/accounts",{
-            method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({address:email,password:password})
-        });
-
-        // ❗ 如果失败自动重试
-        if(createRes.status !== 201){
-            console.log("创建失败，重试...");
-            return create();
-        }
-
-        // 5️⃣ 获取 token
-        let res = await fetch("https://api.mail.tm/token",{
-            method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({address:email,password:password})
-        });
-
-        let data = await res.json();
-        token = data.token;
-
-        document.getElementById("email").innerText = email;
-
-        expire = Date.now() + 10*60*1000;
-
-        timer();
-        fetchMail();
-
-    } catch(e){
-        document.getElementById("email").innerText = "加载失败，点击刷新";
-        console.log(e);
-    }
+    timer();
+    fetchMail();
 }
 
 // 收邮件
 async function fetchMail(){
-    if(!token) return;
+    if(!email) return;
 
-    try {
-        let res = await fetch("https://api.mail.tm/messages",{
-            headers:{Authorization:"Bearer "+token}
-        });
+    let res = await fetch("https://www.emailnator.com/message-list",{
+        method:"POST",
+        headers:{
+            "Content-Type":"application/json"
+        },
+        body: JSON.stringify({
+            email: email
+        })
+    });
 
-        let data = await res.json();
-        let html = "";
+    let data = await res.json();
 
-        (data["hydra:member"] || []).forEach(m=>{
-            html += `
-            <div class="mail">
-                <b>${m.subject || "无主题"}</b><br>
-                ${m.from.address}<br>
-                <div>${m.text || ""}</div>
-            </div>`;
-        });
+    let html="";
+    (data.messageData || []).forEach(m=>{
+        html+=`
+        <div class="mail">
+            <b>${m.subject}</b><br>
+            ${m.from}<br>
+        </div>`;
+    });
 
-        document.getElementById("mails").innerHTML = html;
+    document.getElementById("mails").innerHTML = html;
 
-    } catch(e){
-        console.log("获取邮件失败", e);
-    }
-
-    setTimeout(fetchMail, 5000);
+    setTimeout(fetchMail,5000);
 }
 
 // 倒计时
 function timer(){
-    let left = expire - Date.now();
-    if(left <= 0){
-        document.getElementById("time").innerText = "已过期";
-        token = "";
+    let left = expire-Date.now();
+    if(left<=0){
+        document.getElementById("time").innerText="已过期";
+        email="";
         return;
     }
 
-    let m = Math.floor(left/60000).toString().padStart(2,"0");
-    let s = Math.floor((left%60000)/1000).toString().padStart(2,"0");
+    let m=Math.floor(left/60000).toString().padStart(2,"0");
+    let s=Math.floor((left%60000)/1000).toString().padStart(2,"0");
 
-    document.getElementById("time").innerText = `剩余：${m}:${s}`;
+    document.getElementById("time").innerText=`剩余：${m}:${s}`;
 
-    setTimeout(timer, 1000);
+    setTimeout(timer,1000);
 }
 
-// 复制邮箱
+// 复制
 function copyEmail(){
-    let text = document.getElementById("email").innerText;
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(email);
     alert("已复制");
 }
 
-// 初始化
 create();
 </script>
 </body>
